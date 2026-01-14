@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.5">
+    <title>Тренажёр по информатике</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f5f7fa; padding: 30px; max-width: 900px; margin: 0 auto; font-size: 18px; }
+        .question-container { background: white; border-radius: 16px; padding: 32px; margin-bottom: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .question-number { font-size: 16px; color: #6b7280; margin-bottom: 12px; }
+        .question-text { font-size: 22px; line-height: 1.6; margin-bottom: 24px; font-weight: 500; white-space: pre-wrap; }
+        .instruction { font-size: 16px; color: #4b5563; margin-bottom: 20px; font-style: italic; }
+        .options { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
+        .option { display: flex; align-items: center; padding: 16px; border: 3px solid #e5e7eb; border-radius: 12px; cursor: pointer; transition: all 0.2s; font-size: 20px; }
+        .option:hover { border-color: #cbd5e1; background-color: #f9fafb; }
+        .option.selected { border-color: #3b82f6; background-color: #eff6ff; }
+        .option-letter { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: #e5e7eb; margin-right: 16px; font-weight: bold; color: #374151; font-size: 20px; }
+        .option.selected .option-letter { background: #3b82f6; color: white; }
+        .text-input { width: 100%; padding: 16px; border: 3px solid #e5e7eb; border-radius: 12px; font-size: 20px; margin-bottom: 24px; }
+        .text-input:focus { outline: none; border-color: #3b82f6; }
+        .btn { background: #3b82f6; color: white; border: none; padding: 16px 24px; font-size: 20px; border-radius: 12px; cursor: pointer; font-weight: 600; transition: background 0.2s; margin: 0 8px; }
+        .btn:hover { background: #2563eb; }
+        .btn:disabled { background: #9ca3af; cursor: not-allowed; }
+        .nav-buttons { display: flex; justify-content: space-between; margin-top: 20px; }
+        .results { margin-top: 40px; }
+        .result-header { text-align: center; margin-bottom: 32px; }
+        .grade { font-size: 28px; font-weight: bold; margin-top: 12px; }
+        .grade.excellent { color: #10b981; } .grade.good { color: #f59e0b; } .grade.poor { color: #ef4444; }
+        .result-item { background: white; border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .result-header-text { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+        .result-icon { font-size: 24px; font-weight: bold; }
+        .icon-correct { color: #10b981; } .icon-incorrect { color: #ef4444; }
+        .answer-line { margin: 12px 0; padding: 12px; background: #f3f4f6; border-radius: 8px; font-size: 18px; }
+        .comment { background: #f9fafb; padding: 20px; border-radius: 12px; border-left: 6px solid #3b82f6; margin-top: 16px; font-size: 18px; color: #374151; }
+        .hidden { display: none; }
+        .error { color: #ef4444; text-align: center; padding: 30px; }
+        .restart-btn { background: #3b82f6; color: white; border: none; padding: 16px 32px; font-size: 20px; border-radius: 12px; cursor: pointer; font-weight: 600; transition: background 0.2s; margin-top: 20px; }
+        .restart-btn:hover { background: #2563eb; }
+    </style>
+</head>
+<body>
+    <div id="test-container">
+        <div id="question-area">Загрузка...</div>
+        <div class="nav-buttons">
+            <button id="prev-btn" class="btn" disabled>Назад</button>
+            <button id="next-btn" class="btn" disabled>Далее</button>
+        </div>
+    </div>
+
+    <div id="results-container" class="results hidden">
+        <div class="result-header">
+            <h2 style="font-size: 28px;">Результаты теста</h2>
+            <div id="grade" class="grade"></div>
+        </div>
+        <div id="results-list"></div>
+        <button id="restart-btn" class="restart-btn">Пройти тест заново</button>
+    </div>
+
+    <script>
+        let allQuestionsData = [];
+        let currentQuestionIndex = 0;
+        let userAnswers = [];
+
+        function formatAnswer(answer, isText, options) {
+            if (isText) return `"${answer}"`;
+            if (!answer) return "";
+            if (Array.isArray(answer)) {
+                return answer.map(letter => {
+                    const idx = ['A','B','C','D'].indexOf(letter);
+                    return `${letter} - ${options[idx] || letter}`;
+                }).join(', ');
+            } else {
+                const idx = ['A','B','C','D'].indexOf(answer);
+                return `${answer} - ${options[idx] || answer}`;
+            }
+        }
+
+        function renderQuestion() {
+            const question = allQuestionsData[currentQuestionIndex];
+            const container = document.getElementById('question-area');
+            const qNum = currentQuestionIndex + 1;
+
+            if (question.type === 'text') {
+                container.innerHTML = `
+                    <div class="question-container">
+                        <div class="question-number">Вопрос ${qNum}</div>
+                        <div class="question-text">${question.text}</div>
+                        <div class="instruction">Введите команду:</div>
+                        <input type="text" id="text-answer" class="text-input" placeholder="Введите команду...">
+                    </div>
+                `;
+                const input = document.getElementById('text-answer');
+                input.value = userAnswers[currentQuestionIndex] || '';
+                input.addEventListener('input', () => {
+                    document.getElementById('next-btn').disabled = input.value.trim() === '';
+                });
+                document.getElementById('next-btn').disabled = (userAnswers[currentQuestionIndex] || '').trim() === '';
+            } else {
+                let optionsHtml = '';
+                const letters = ['A', 'B', 'C', 'D'];
+                question.options.forEach((opt, idx) => {
+                    const isSelected = (userAnswers[currentQuestionIndex] || []).includes(letters[idx]);
+                    optionsHtml += `
+                        <div class="option ${isSelected ? 'selected' : ''}" data-letter="${letters[idx]}">
+                            <div class="option-letter">${letters[idx]}</div>
+                            <div>${opt}</div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = `
+                    <div class="question-container">
+                        <div class="question-number">Вопрос ${qNum}</div>
+                        <div class="question-text">${question.text}</div>
+                        <div class="instruction">Выберите один или несколько вариантов ответа</div>
+                        <div class="options">${optionsHtml}</div>
+                    </div>
+                `;
+                document.querySelectorAll('.option').forEach(opt => {
+                    opt.addEventListener('click', () => {
+                        opt.classList.toggle('selected');
+                        saveCurrentSelection();
+                        updateNextButton();
+                    });
+                });
+                updateNextButton();
+            }
+
+            document.getElementById('prev-btn').disabled = currentQuestionIndex === 0;
+        }
+
+        function saveCurrentSelection() {
+            const question = allQuestionsData[currentQuestionIndex];
+            if (question.type === 'text') {
+                userAnswers[currentQuestionIndex] = document.getElementById('text-answer').value.trim();
+            } else {
+                const selected = document.querySelectorAll('.option.selected');
+                userAnswers[currentQuestionIndex] = Array.from(selected).map(el => el.dataset.letter);
+            }
+        }
+
+        function updateNextButton() {
+            const answer = userAnswers[currentQuestionIndex];
+            const isValid = answer != null && (
+                (typeof answer === 'string' && answer.trim().length > 0) ||
+                (Array.isArray(answer) && answer.length > 0)
+            );
+            document.getElementById('next-btn').disabled = !isValid;
+        }
+
+        function checkAnswer(userAns, correctAns, isText) {
+            if (isText) return userAns.toLowerCase() === correctAns.toLowerCase();
+            const userSet = new Set(Array.isArray(userAns) ? userAns : [userAns]);
+            const correctSet = new Set(Array.isArray(correctAns) ? correctAns : [correctAns]);
+            if (userSet.size !== correctSet.size) return false;
+            for (let item of userSet) {
+                if (!correctSet.has(item)) return false;
+            }
+            return true;
+        }
+
+        function showResults() {
+            document.getElementById('test-container').classList.add('hidden');
+            document.getElementById('results-container').classList.remove('hidden');
+
+            const correctCount = allQuestionsData.reduce((count, q, i) => {
+                return count + (checkAnswer(userAnswers[i], q.correct, q.type === 'text') ? 1 : 0);
+            }, 0);
+            const percent = (correctCount / 13) * 100;
+
+            let gradeText, gradeClass;
+            if (percent >= 70) { gradeText = 'отлично'; gradeClass = 'excellent'; }
+            else if (percent >= 30) { gradeText = 'удовлетворительно'; gradeClass = 'good'; }
+            else { gradeText = 'неудовлетворительно'; gradeClass = 'poor'; }
+
+            document.getElementById('grade').textContent = `${correctCount} из 13 (${percent.toFixed(1)}%) — ${gradeText}`;
+            document.getElementById('grade').className = `grade ${gradeClass}`;
+
+            let resultsHtml = '';
+            allQuestionsData.forEach((q, idx) => {
+                const isCorrect = checkAnswer(userAnswers[idx], q.correct, q.type === 'text');
+                const icon = isCorrect ? '✅' : '❌';
+                const iconClass = isCorrect ? 'icon-correct' : 'icon-incorrect';
+                const userAnswerStr = formatAnswer(userAnswers[idx] || '', q.type === 'text', q.options);
+                const correctAnswerStr = formatAnswer(q.correct, q.type === 'text', q.options);
+
+                resultsHtml += `
+                    <div class="result-item">
+                        <div class="result-header-text">
+                            <span class="result-icon ${iconClass}">${icon}</span>
+                            <strong>Вопрос ${idx + 1}</strong>
+                        </div>
+                        <div class="question-text">${q.text}</div>
+                        <div class="answer-line"><strong>Ваш ответ:</strong> ${userAnswerStr}</div>
+                        <div class="answer-line"><strong>Правильный ответ:</strong> ${correctAnswerStr}</div>
+                        <div class="comment">${q.comment}</div>
+                    </div>
+                `;
+            });
+            document.getElementById('results-list').innerHTML = resultsHtml;
+        }
+
+        // НАВИГАЦИЯ
+        document.getElementById('prev-btn').addEventListener('click', () => {
+            if (currentQuestionIndex > 0) {
+                saveCurrentSelection();
+                currentQuestionIndex--;
+                renderQuestion();
+            }
+        });
+
+        document.getElementById('next-btn').addEventListener('click', () => {
+            saveCurrentSelection();
+            if (currentQuestionIndex < 12) {
+                currentQuestionIndex++;
+                renderQuestion();
+            } else {
+                showResults();
+            }
+        });
+
+        // ПЕРЕЗАПУСК
+        document.getElementById('restart-btn').addEventListener('click', loadQuestions);
+
+        // ЗАГРУЗКА ВОПРОСОВ
+        function loadQuestions() {
+            fetch('questions.json')
+                .then(response => response.json())
+                .then(fullData => {
+                    allQuestionsData = [];
+                    for (let i = 1; i <= 13; i++) {
+                        const key = `type_${i.toString().padStart(2, '0')}`;
+                        const questions = fullData[key];
+                        if (questions && questions.length) {
+                            allQuestionsData.push(questions[Math.floor(Math.random() * questions.length)]);
+                        }
+                    }
+                    if (allQuestionsData.length === 13) {
+                        currentQuestionIndex = 0;
+                        userAnswers = new Array(13).fill('');
+                        document.getElementById('results-container').classList.add('hidden');
+                        document.getElementById('test-container').classList.remove('hidden');
+                        renderQuestion();
+                    } else {
+                        document.getElementById('question-area').innerHTML = '<div class="error">Ошибка: не хватает вопросов.</div>';
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('question-area').innerHTML = 
+                        '<div class="error">Не найден файл questions.json. Убедитесь, что он лежит рядом с этим HTML-файлом.</div>';
+                });
+        }
+
+        // СТАРТ
+        loadQuestions();
+    </script>
+</body>
+</html>
